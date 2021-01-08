@@ -1,53 +1,60 @@
-const express = require('express');
-const bodyParser = require('body-parser')
-const download = require('download')
-const FileType = require('file-type');
-const path = require('path')
-const mime = require('mime-types')
+require("dotenv").config();
+const express = require("express");
+const bodyParser = require("body-parser");
+const download = require("download");
+const { nanoid } = require("nanoid");
+const csv = require("csvtojson");
 
 const app = express();
 
-const port = 6000;
-const csv = require('csvtojson')
-const fs = require('fs-extra')
-const results = [];
+const port = process.env.PORT;
 
 app.use(bodyParser.json());
-app.use(express.json());
 
-// app.get('/', (req, res) => {
-//     console.log('it works')
-//     res.send("hey")
-// })
+app.get("/", (req, res) => {
+  return res.send({
+    message: "Welcome to the app!",
+  });
+});
 
-app.post('/', async (req, res) => {
-    const { select_field, url }= req.body.csv
-    if(!url){
-        return res.send({
-            error: true,
-            message:"url cannot be empty!"
-        })
-    }
-    await download(url, "downloads" , {
-        filename:"data.csv"
+app.post("/", async (req, res) => {
+  const { select_fields, url } = req.body.csv;
+  if (!url) {
+    return res.send({
+      message: "url cannot be empty!",
+    });
+  }
+  await download(url, "downloads", {
+    filename: "data.csv",
+  });
+
+  let json = await csv().fromFile("downloads/data.csv");
+
+  const conversion_key = nanoid();
+  if (!select_fields) {
+    return res.send({
+      conversion_key,
+      json,
+    });
+  }
+
+  json = json.map((obj) => {
+    const data = {};
+
+    select_fields.forEach((field) => {
+      data[field] = obj[field];
     });
 
-  const mimeType = mime.contentType('downloads/data.csv') 
-  console.log('feed back', mimeType);
-    if(mimeType !== 'text/csv'){
-        return res.send({
-            error: true,
-            message: "Url does not contain a valid csv file"
-        })
-    }
+    Object.keys(data).forEach((key) => !data[key] && delete data[key]);
+    return data;
+  });
 
-    const jsonArray=await csv().fromFile('downloads/data.csv');
-    console.log({jsonArray})
-
-
-    console.log('result', req.body.csv)
-})
+  return res.send({
+    conversion_key,
+    json,
+  });
+});
 
 app.listen(port, () => {
-    console.log(`App is listening now on port ${port}`)
-})
+  console.log(`App is listening now on port ${port}`);
+});
